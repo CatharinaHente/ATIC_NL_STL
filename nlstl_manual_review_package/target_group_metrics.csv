@@ -1,0 +1,37 @@
+condition,target_paper,case_type,n,strict_action_accuracy,automatic_pass_rate,median_latency_seconds,mean_ast_f1
+Anthropic direct,ChatSTL,expected_strength,5,0.6,0.0,22.08972341599292,0.7942028985507247
+Anthropic direct,ChatSTL,limitation_probe,25,0.84,0.4,6.555148334009573,0.913442725870137
+Anthropic direct,ClarifySTL,expected_strength,5,0.4,0.2,5.6364486669772305,0.9456521739130435
+Anthropic direct,ClarifySTL,limitation_probe,25,0.76,0.64,6.411501541995676,0.9199820788530465
+Anthropic direct,DeepSTL,expected_strength,5,1.0,1.0,4.151629208994564,1.0
+Anthropic direct,DeepSTL,limitation_probe,25,0.88,0.4,5.539408667013049,0.8900133320785494
+Anthropic direct,Formula-first robotics,source_formula,30,1.0,0.5,3.5497936040046625,0.9623372471203023
+Anthropic direct,STL-DivEn/KGST,expected_strength,5,1.0,1.0,6.779097040998749,1.0
+Anthropic direct,STL-DivEn/KGST,limitation_probe,25,0.88,0.52,4.222277124994434,0.9179747788443441
+Clarify-inspired Anthropic,ChatSTL,expected_strength,5,0.0,0.0,7.238532000017585,
+Clarify-inspired Anthropic,ChatSTL,limitation_probe,25,0.32,0.16,11.591993041016394,0.9393939393939394
+Clarify-inspired Anthropic,ClarifySTL,expected_strength,5,0.8,0.2,27.675700292020338,0.9791666666666666
+Clarify-inspired Anthropic,ClarifySTL,limitation_probe,25,0.72,0.44,21.824824459006777,0.9331747638326586
+Clarify-inspired Anthropic,DeepSTL,expected_strength,5,1.0,1.0,12.766711458010832,1.0
+Clarify-inspired Anthropic,DeepSTL,limitation_probe,25,0.6,0.44,13.239671375020407,0.9701525054466231
+Clarify-inspired Anthropic,Formula-first robotics,source_formula,30,0.5333333333333333,0.2,11.015968583495123,0.9521185513832573
+Clarify-inspired Anthropic,STL-DivEn/KGST,expected_strength,5,0.2,0.2,15.265385332982987,1.0
+Clarify-inspired Anthropic,STL-DivEn/KGST,limitation_probe,25,0.48,0.4,14.95466975000454,0.952457757296467
+Clarify-inspired OpenAI,ChatSTL,expected_strength,5,0.0,0.0,5.658162999985507,
+Clarify-inspired OpenAI,ChatSTL,limitation_probe,25,0.44,0.2,7.56455320797977,0.7491004819436192
+Clarify-inspired OpenAI,ClarifySTL,expected_strength,5,0.8,0.0,13.5105845000071,0.927536231884058
+Clarify-inspired OpenAI,ClarifySTL,limitation_probe,25,0.6,0.4,11.388018375000684,0.95518957477786
+Clarify-inspired OpenAI,DeepSTL,expected_strength,5,1.0,1.0,5.8314314169983845,1.0
+Clarify-inspired OpenAI,DeepSTL,limitation_probe,25,0.68,0.36,7.399963917006971,0.9371454774268073
+Clarify-inspired OpenAI,Formula-first robotics,source_formula,30,0.6666666666666666,0.36666666666666664,6.212318353995215,0.9047776297776299
+Clarify-inspired OpenAI,STL-DivEn/KGST,expected_strength,5,0.0,0.0,5.772715291008353,
+Clarify-inspired OpenAI,STL-DivEn/KGST,limitation_probe,25,0.52,0.36,7.257890375010902,0.9702380952380952
+OpenAI direct,ChatSTL,expected_strength,5,0.2,0.0,2.8718925840221345,0.782608695652174
+OpenAI direct,ChatSTL,limitation_probe,25,0.6,0.36,2.559516499983147,0.9577272727272728
+OpenAI direct,ClarifySTL,expected_strength,5,0.8,0.2,3.38073245799751,0.9289855072463767
+OpenAI direct,ClarifySTL,limitation_probe,25,0.68,0.56,3.1687116250104737,0.9234712687515891
+OpenAI direct,DeepSTL,expected_strength,5,1.0,1.0,1.490613082976779,1.0
+OpenAI direct,DeepSTL,limitation_probe,25,0.72,0.4,2.15084966600989,0.9329319480683504
+OpenAI direct,Formula-first robotics,source_formula,30,0.8,0.36666666666666664,1.5794894374994328,0.9069908862591789
+OpenAI direct,STL-DivEn/KGST,expected_strength,5,0.6,0.2,2.354123042023275,0.9058671824629272
+OpenAI direct,STL-DivEn/KGST,limitation_probe,25,0.8,0.52,2.1499998329964,0.9391818340469015
