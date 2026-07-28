@@ -1,0 +1,5 @@
+condition,absolute_value,api_or_schema_error,boundary_ordering,clarification_incomplete,clarification_wrong_slot,implication_direction,implication_scope,logical_scope,logical_scope_precedence,missing_global_scope,no_final_formula,parse_failure,quantifier_scope,temporal_bound,temporal_operator,temporal_scope,trigger_event_semantics,wrong_initial_action
+Anthropic direct,1,0,1,1,0,1,0,2,1,0,2,0,1,2,0,0,0,20
+Clarify-inspired Anthropic,0,3,1,1,3,0,0,0,0,0,12,0,0,1,1,0,1,56
+Clarify-inspired OpenAI,1,0,0,2,0,0,0,0,0,1,20,2,0,0,0,0,1,53
+OpenAI direct,0,0,0,2,1,1,1,1,1,0,6,1,0,0,1,1,1,37
