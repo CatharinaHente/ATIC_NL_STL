@@ -19,13 +19,21 @@ STL formula --> syntax tree --> recursive traversal --> human readable text + st
 Parser: 
 
 2
-existing approaches    input                         technique                equivalence
-STLSat                 bounded, discrete-time STL    tableau + FOL/SMT        yes
-SPOT                   LTL                           automata                 yes
-LTL2DFA                LTLf                          DFA construction         yes (via DFA)
+| Extension                       | Input                      | Technique                                              | Goal                                                                |
+| ------------------------------- | -------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------- |
+| **Rule-based back-translation** | STL                        | STL → syntax tree → recursive traversal                | Human-readable text + structural trace for human exception handling |
+| **Automaton-based equivalence** | Two STL representations    | STLSat directly; fallback to STL → LTL/LTLf → automata | Formal equivalence check                                            |
+| **Bonus: semantic slots**       | NL + STL                   | Extract predicates, operators, intervals, relations    | Structured semantic comparison                                      |
+| **Existing approaches**         |                            |                                                        |                                                                     |
+| STLSat                          | Bounded, discrete-time STL | Tableau + FOL/SMT                                      | Equivalence                                                         |
+| Spot                            | LTL                        | Automata                                               | Equivalence                                                         |
+| LTLf2DFA                        | LTLf                       | DFA construction                                       | Equivalence via DFA                                                 |
 
-pre-step to SPOT/LTL2DFA
-STL->LTL/LTLf          restricted STL                reduction, then automata
-
-idea: use STLSat directly if it works, revert to LTL/automata reduction if it does not 
-      (our contribution: streamlined pipeline)
+STLSat — https://arxiv.org/abs/2607.21081
+STLSat repository — https://github.com/MarcoZamponi/STLSat
+PyTeLo — https://github.com/erl-lehigh/PyTeLo
+PyTeLo paper — https://arxiv.org/abs/2310.08714
+Spot — https://spot.lre.epita.fr/
+Spot repository — https://gitlab.lre.epita.fr/spot/spot
+LTLf2DFA — https://github.com/whitemech/LTLf2DFA
+LTLf2DFA paper/software record — https://doi.org/10.5281/zenodo.3888410
