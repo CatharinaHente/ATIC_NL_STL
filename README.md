@@ -14,11 +14,6 @@ DeepSTL code is taken from: https://github.com/JieHE-2020/DeepSTL
 2 - automaton-based equivalence checks (are two representations equivalent)
 (bonus - semantic slots)
 
-1
-STL formula --> syntax tree --> recursive traversal --> human readable text + structural trace
-Parser: 
-
-2
 | Extension                       | Input                      | Technique                                              | Goal                                                                |
 | ------------------------------- | -------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------- |
 | **Rule-based back-translation** | STL                        | STL → syntax tree → recursive traversal                | Human-readable text + structural trace for human exception handling |
@@ -30,10 +25,17 @@ Parser:
 | LTLf2DFA                        | LTLf                       | DFA construction                                       | Equivalence via DFA                                                 |
 
 STLSat — https://arxiv.org/abs/2607.21081
+
 STLSat repository — https://github.com/MarcoZamponi/STLSat
+
 PyTeLo — https://github.com/erl-lehigh/PyTeLo
+
 PyTeLo paper — https://arxiv.org/abs/2310.08714
+
 Spot — https://spot.lre.epita.fr/
+
 Spot repository — https://gitlab.lre.epita.fr/spot/spot
+
 LTLf2DFA — https://github.com/whitemech/LTLf2DFA
+
 LTLf2DFA paper/software record — https://doi.org/10.5281/zenodo.3888410
