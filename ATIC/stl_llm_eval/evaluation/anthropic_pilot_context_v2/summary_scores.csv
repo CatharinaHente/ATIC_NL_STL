@@ -1,0 +1,6 @@
+acceptable_action_accuracy,api_success_rate,automatic_fail,automatic_pass,canonical_exact_match_rate,case_type,formula_parse_rate,group,manual_review,mean_ast_f1,mean_clarification_slot_f1,mean_constant_f1,mean_identifier_f1,mean_input_tokens,mean_latency_seconds,mean_operator_f1,mean_output_tokens,mean_token_f1,model,n,provider,strict_action_accuracy,target_paper,task_mode
+0.95,1.0,1,12,0.6,,1.0,,7,0.9376505439005438,0.54,0.8595238095238095,1.0,1853.6,4.4861917750458815,0.9259307359307358,156.3,0.9171919255238752,claude-sonnet-5,20,anthropic,0.95,,
+0.8,1.0,1,2,0.4,limitation_probe,1.0,paper_challenge,2,0.87004662004662,0.54,0.7047619047619047,1.0,2959.8,6.552380916592665,0.856103896103896,212.4,0.8661904761904762,claude-sonnet-5,5,anthropic,0.8,DeepSTL,clarify_then_translate
+1.0,1.0,0,3,0.6,limitation_probe,1.0,paper_challenge,2,0.8805555555555555,,0.7333333333333333,1.0,1464.2,3.4336702501866965,0.8476190476190476,91.0,0.8243697478991597,claude-sonnet-5,5,anthropic,1.0,DeepSTL,translate
+1.0,1.0,0,5,1.0,expected_strength,1.0,paper_supported,0,1.0,,1.0,1.0,1484.8,3.6296376917976887,1.0,128.0,0.9909090909090909,claude-sonnet-5,5,anthropic,1.0,DeepSTL,translate
+1.0,1.0,0,2,0.4,source_formula,1.0,robotics_real_world,3,1.0,,1.0,1.0,1505.6,4.329078241606476,1.0,193.8,0.9872983870967742,claude-sonnet-5,5,anthropic,1.0,Formula-first robotics,translate

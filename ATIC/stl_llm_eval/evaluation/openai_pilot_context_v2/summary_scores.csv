@@ -1,0 +1,6 @@
+acceptable_action_accuracy,api_success_rate,automatic_fail,automatic_pass,canonical_exact_match_rate,case_type,formula_parse_rate,group,manual_review,mean_ast_f1,mean_clarification_slot_f1,mean_constant_f1,mean_identifier_f1,mean_input_tokens,mean_latency_seconds,mean_operator_f1,mean_output_tokens,mean_token_f1,model,n,provider,strict_action_accuracy,target_paper,task_mode
+0.95,1.0,1,13,0.7368421052631579,,1.0,,6,0.9724764810577168,0.7466666666666667,0.9573934837092731,1.0,934.3,2.8036986270017223,0.963317384370016,137.6,0.9726895262868339,gpt-5.6-terra,20,openai,0.95,,
+1.0,1.0,0,2,0.6,limitation_probe,1.0,paper_challenge,3,0.9398550724637682,0.7466666666666667,0.9047619047619048,1.0,1623.6,5.273815974796889,0.9272727272727274,301.2,0.9558536585365853,gpt-5.6-terra,5,openai,1.0,DeepSTL,clarify_then_translate
+1.0,1.0,0,4,0.8,limitation_probe,1.0,paper_challenge,1,0.9555555555555555,,0.9333333333333333,1.0,691.2,1.638557425205363,0.9333333333333333,60.2,0.9571428571428571,gpt-5.6-terra,5,openai,1.0,DeepSTL,translate
+1.0,1.0,0,5,1.0,expected_strength,1.0,paper_supported,0,1.0,,1.0,1.0,703.6,1.8644159082032274,1.0,64.4,1.0,gpt-5.6-terra,5,openai,1.0,DeepSTL,translate
+0.8,1.0,1,2,0.5,source_formula,1.0,robotics_real_world,2,1.0,,1.0,1.0,718.8,2.4380051998014096,1.0,124.6,0.979029605263158,gpt-5.6-terra,5,openai,0.8,Formula-first robotics,translate

@@ -1,0 +1,5 @@
+condition,started_utc,finished_utc,wall_seconds,concurrency,results_file
+OpenAI direct,2026-07-19T19:53:36Z,2026-07-19T20:00:29Z,413,1,runs/full_suite/full_v1/openai_direct.jsonl
+Anthropic direct,2026-07-19T20:00:29Z,2026-07-19T20:15:00Z,871,1,runs/full_suite/full_v1/anthropic_direct.jsonl
+Clarify-inspired OpenAI,2026-07-19T20:15:00Z,2026-07-19T20:35:26Z,1226,1,runs/full_suite/full_v1/clarify_openai.jsonl
+Clarify-inspired Anthropic,2026-07-19T20:35:26Z,2026-07-19T21:34:23Z,3537,1,runs/full_suite/full_v1/clarify_anthropic.jsonl

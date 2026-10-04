@@ -1,0 +1,3 @@
+acceptable_action_accuracy,api_success_rate,automatic_fail,automatic_pass,canonical_exact_match_rate,case_type,formula_parse_rate,group,manual_review,mean_ast_f1,mean_clarification_slot_f1,mean_constant_f1,mean_identifier_f1,mean_input_tokens,mean_latency_seconds,mean_operator_f1,mean_output_tokens,mean_token_f1,model,n,provider,strict_action_accuracy,target_paper,task_mode
+1.0,1.0,0,1,1.0,,1.0,,0,1.0,,1.0,1.0,0.0,8.708333291986492,1.0,0.0,1.0,clarifystl-local,1,clarify,1.0,,
+1.0,1.0,0,1,1.0,expected_strength,1.0,paper_supported,0,1.0,,1.0,1.0,0.0,8.708333291986492,1.0,0.0,1.0,clarifystl-local,1,clarify,1.0,DeepSTL,translate

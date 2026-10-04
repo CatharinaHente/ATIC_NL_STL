@@ -1,0 +1,6 @@
+acceptable_action_accuracy,api_success_rate,automatic_fail,automatic_pass,canonical_exact_match_rate,case_type,formula_parse_rate,group,manual_review,mean_ast_f1,mean_clarification_slot_f1,mean_constant_f1,mean_identifier_f1,mean_input_tokens,mean_latency_seconds,mean_operator_f1,mean_output_tokens,mean_token_f1,model,n,provider,strict_action_accuracy,target_paper,task_mode
+0.85,1.0,5,11,0.7333333333333333,,1.0,,4,0.979951690821256,0.5711111111111111,0.9682539682539683,1.0,0.0,7.710995685296075,0.9757575757575758,0.0,0.9852845528455284,clarifystl-local,20,clarify,0.85,,
+1.0,1.0,2,1,0.3333333333333333,limitation_probe,1.0,paper_challenge,2,0.8997584541062801,0.5711111111111111,0.8412698412698413,1.0,0.0,12.505634749593446,0.8787878787878788,0.0,0.9264227642276422,clarifystl-local,5,clarify,1.0,DeepSTL,clarify_then_translate
+0.8,1.0,1,4,1.0,limitation_probe,1.0,paper_challenge,0,1.0,,1.0,1.0,0.0,6.006260041799396,1.0,0.0,1.0,clarifystl-local,5,clarify,0.8,DeepSTL,translate
+1.0,1.0,0,5,1.0,expected_strength,1.0,paper_supported,0,1.0,,1.0,1.0,0.0,6.495183516596444,1.0,0.0,1.0,clarifystl-local,5,clarify,1.0,DeepSTL,translate
+0.6,1.0,2,1,0.3333333333333333,source_formula,1.0,robotics_real_world,2,1.0,,1.0,1.0,0.0,5.836904433195014,1.0,0.0,1.0,clarifystl-local,5,clarify,0.6,Formula-first robotics,translate
