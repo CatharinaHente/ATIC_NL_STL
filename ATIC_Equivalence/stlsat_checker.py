@@ -187,24 +187,19 @@ def check_equivalence(
  
 def _parse_stlsat_output(raw: str, combined: str) -> EquivalenceResult:
     """
-    Interpret stlsat's stdout/stderr.
- 
-    STLSat prints either:
-        SATISFIABLE      (the XOR formula has a model → formulas differ)
-        UNSATISFIABLE    (no model → formulas are equivalent)
-    or a parse/internal error message.
+    STLSat prints:
+        Tableau result: Some(true)   → SAT → formulas differ
+        Tableau result: Some(false)  → UNSAT → formulas equivalent
     """
-    upper = raw.upper()
- 
-    if "UNSATISFIABLE" in upper:
+    if "Some(false)" in raw:
         return EquivalenceResult(
             verdict=Verdict.EQUIVALENT,
             detail="Formulas are semantically equivalent (XOR formula is UNSAT).",
             raw_output=raw,
             formula=combined,
         )
- 
-    if "SATISFIABLE" in upper:
+
+    if "Some(true)" in raw:
         return EquivalenceResult(
             verdict=Verdict.NON_EQUIVALENT,
             detail=(
@@ -214,8 +209,7 @@ def _parse_stlsat_output(raw: str, combined: str) -> EquivalenceResult:
             raw_output=raw,
             formula=combined,
         )
- 
-    # anything else is an error (parse failure, unsupported fragment, crash…)
+
     return EquivalenceResult(
         verdict=Verdict.ERROR,
         detail=f"stlsat returned an unexpected result. Raw output: {raw[:300]}",
