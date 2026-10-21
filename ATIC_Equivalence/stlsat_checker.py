@@ -2,74 +2,65 @@
 stlsat_checker.py
 -----------------
 Python interface to the STLSat binary for STL formula equivalence checking.
+Also includes a dataset runner that reads stlsat-routed rows from layer1.csv.
  
-Usage (from your pipeline):
+Usage (single pair):
     from stlsat_checker import check_equivalence, EquivalenceResult
- 
     result = check_equivalence("G[0,10] (x > 5)", "G[0,10] (x > 5)")
-    print(result.verdict)       # EQUIVALENT, NON_EQUIVALENT, or ERROR
-    print(result.detail)        # human-readable explanation
-    print(result.raw_output)    # raw stlsat stdout, useful for debugging
  
-Formula string format expected (same as STLSat's own syntax):
-    - Temporal : G[a,b] phi  |  F[a,b] phi  |  phi U[a,b] psi  |  phi R[a,b] psi
-    - Boolean  : &&  ||  !  ->  <->
-    - Atoms    : x > 5  |  x <= 3.0  |  on1  |  true  |  false
-    - Grouping : (phi)
-    - NO unbounded operators (G phi without [a,b] is rejected before calling stlsat)
+Usage (dataset):
+    python stlsat_checker.py --input data/layer1.csv --output data/stlsat_results.csv
+ 
+Formula string format (STLSat syntax):
+    G[a,b] phi  |  F[a,b] phi  |  phi U[a,b] psi  |  phi R[a,b] psi
+    &&  ||  !  ->  <->   |   x > 5  |  on1  |  true  |  false
  
 Equivalence encoding:
     phi1 == phi2  iff  (phi1 && !phi2) || (!phi1 && phi2)  is UNSAT
 """
  
+import csv
 import re
 import shutil
 import subprocess
 import tempfile
+import time
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
  
  
 # ---------------------------------------------------------------------------
-# Result type
+# Result types
 # ---------------------------------------------------------------------------
  
 class Verdict(str, Enum):
     EQUIVALENT     = "EQUIVALENT"
     NON_EQUIVALENT = "NON_EQUIVALENT"
-    ERROR          = "ERROR"          # parse error, unsupported fragment, timeout, …
+    ERROR          = "ERROR"
  
  
 @dataclass
 class EquivalenceResult:
-    verdict:    Verdict
-    detail:     str           # human-readable summary
-    raw_output: str           # raw stlsat stdout + stderr, for debugging
-    formula:    str = ""      # the combined formula that was checked
+    verdict:      Verdict
+    detail:       str
+    raw_output:   str
+    formula:      str = ""
+    duration_sec: float = 0.0
  
  
 # ---------------------------------------------------------------------------
 # Fragment pre-check
 # ---------------------------------------------------------------------------
  
-# Unbounded G/F look like  G <space> (  or  F <space> (  — no [a,b] following
 _UNBOUNDED_RE = re.compile(r'\b[GF]\s*(?!\[)')
  
-def _check_fragment(formula_str: str) -> str | None:
-    """
-    Return an error message if the formula uses operators outside STLSat's
-    supported fragment, otherwise return None.
  
-    STLSat requires ALL temporal operators to be bounded: G[a,b], F[a,b],
-    U[a,b], R[a,b].  A bare G or F (without [a,b]) is not parseable by
-    STLSat and would produce a confusing error — we catch it here first.
-    """
+def _check_fragment(formula_str: str) -> str | None:
     if _UNBOUNDED_RE.search(formula_str):
         return (
-            "Formula contains an unbounded temporal operator (G or F without [a,b]). "
-            "STLSat only supports bounded discrete-time STL. "
-            "Consider bounding the operator or routing to the SPOT/LTLf fallback."
+            "Unbounded temporal operator (G or F without [a,b]). "
+            "STLSat only supports bounded discrete-time STL."
         )
     return None
  
@@ -79,10 +70,6 @@ def _check_fragment(formula_str: str) -> str | None:
 # ---------------------------------------------------------------------------
  
 def _find_stlsat() -> str:
-    """
-    Locate the stlsat binary.  Looks in PATH first, then the default Cargo
-    install location (~/.cargo/bin/stlsat).
-    """
     path = shutil.which("stlsat")
     if path:
         return path
@@ -90,9 +77,9 @@ def _find_stlsat() -> str:
     if fallback.exists():
         return str(fallback)
     raise FileNotFoundError(
-        "stlsat binary not found.  Make sure it is installed:\n"
+        "stlsat binary not found. Install with:\n"
         "  cargo install --path <path-to-stlsat-repo>\n"
-        "and that ~/.cargo/bin is on your PATH."
+        "and ensure ~/.cargo/bin is on your PATH."
     )
  
  
@@ -100,82 +87,89 @@ def _find_stlsat() -> str:
 # Core equivalence check
 # ---------------------------------------------------------------------------
  
+def _to_stlsat_syntax(formula: str) -> str:
+    """
+    Normalise formula to STLSat syntax:
+      1. var = 0  →  !(var)        bool false assignment
+      2. var = 1  →  var           bool true assignment
+      3. single = →  ==            remaining equality (numeric predicates)
+      4. &  →  &&,   |  →  ||     connectives
+    Order matters: do bool assignments before the = → == substitution.
+    """
+    # 1. bool false:  var = 0  →  !(var)
+    formula = re.sub(
+        r'([A-Za-z_][A-Za-z0-9_]*)\s*=\s*0\b',
+        lambda m: f'!({m.group(1)})',
+        formula
+    )
+    # 2. bool true:  var = 1  →  var
+    formula = re.sub(
+        r'([A-Za-z_][A-Za-z0-9_]*)\s*=\s*1\b',
+        lambda m: m.group(1),
+        formula
+    )
+    # 3. single = → ==  (skip <=, >=, !=, already-doubled ==)
+    formula = re.sub(r'(?<![<>!=])=(?!=)', '==', formula)
+    # 4. connectives
+    formula = re.sub(r'(?<!&)&(?!&)', '&&', formula)
+    formula = re.sub(r'(?<!\|)\|(?!\|)', '||', formula)
+    return formula
+ 
+ 
 def check_equivalence(
     phi1: str,
     phi2: str,
     timeout: int = 30,
 ) -> EquivalenceResult:
-    """
-    Check whether two STL formula strings are semantically equivalent.
+    phi1 = _to_stlsat_syntax(phi1.strip())
+    phi2 = _to_stlsat_syntax(phi2.strip())
  
-    Parameters
-    ----------
-    phi1, phi2 : str
-        STL formulas in STLSat syntax (see module docstring).
-    timeout : int
-        Seconds before the stlsat call is killed and ERROR is returned.
- 
-    Returns
-    -------
-    EquivalenceResult with verdict EQUIVALENT, NON_EQUIVALENT, or ERROR.
-    """
-    phi1 = phi1.strip()
-    phi2 = phi2.strip()
- 
-    # --- fragment check ---
     for phi, label in [(phi1, "phi1"), (phi2, "phi2")]:
         err = _check_fragment(phi)
         if err:
             return EquivalenceResult(
                 verdict=Verdict.ERROR,
                 detail=f"Fragment check failed for {label}: {err}",
-                raw_output="",
-                formula="",
+                raw_output="", formula="",
             )
  
-    # --- build equivalence formula: (phi1 && !phi2) || (!phi1 && phi2) ---
     combined = f"({phi1} && !({phi2})) || (!({phi1}) && ({phi2}))"
  
-    # --- write to temp file and call stlsat ---
     try:
         binary = _find_stlsat()
     except FileNotFoundError as e:
         return EquivalenceResult(
-            verdict=Verdict.ERROR,
-            detail=str(e),
-            raw_output="",
-            formula=combined,
+            verdict=Verdict.ERROR, detail=str(e),
+            raw_output="", formula=combined,
         )
  
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".stl", delete=False
-    ) as tmp:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".stl", delete=False) as tmp:
         tmp.write(combined + "\n")
         tmp_path = tmp.name
  
+    t0 = time.perf_counter()
     try:
         proc = subprocess.run(
             [binary, tmp_path],
-            capture_output=True,
-            text=True,
-            timeout=timeout,
+            capture_output=True, text=True, timeout=timeout,
         )
+        duration = time.perf_counter() - t0
         raw = proc.stdout + proc.stderr
-        return _parse_stlsat_output(raw, combined)
+        result = _parse_stlsat_output(raw, combined)
+        result.duration_sec = duration
+        return result
  
     except subprocess.TimeoutExpired:
         return EquivalenceResult(
             verdict=Verdict.ERROR,
             detail=f"stlsat timed out after {timeout}s.",
-            raw_output="TIMEOUT",
-            formula=combined,
+            raw_output="TIMEOUT", formula=combined,
         )
     except Exception as e:
         return EquivalenceResult(
             verdict=Verdict.ERROR,
-            detail=f"Unexpected error calling stlsat: {e}",
-            raw_output="",
-            formula=combined,
+            detail=f"Unexpected error: {e}",
+            raw_output="", formula=combined,
         )
     finally:
         Path(tmp_path).unlink(missing_ok=True)
@@ -186,96 +180,148 @@ def check_equivalence(
 # ---------------------------------------------------------------------------
  
 def _parse_stlsat_output(raw: str, combined: str) -> EquivalenceResult:
-    """
-    STLSat prints:
-        Tableau result: Some(true)   → SAT → formulas differ
-        Tableau result: Some(false)  → UNSAT → formulas equivalent
-    """
     if "Some(false)" in raw:
         return EquivalenceResult(
             verdict=Verdict.EQUIVALENT,
-            detail="Formulas are semantically equivalent (XOR formula is UNSAT).",
-            raw_output=raw,
-            formula=combined,
+            detail="Equivalent (XOR formula is UNSAT).",
+            raw_output=raw, formula=combined,
         )
-
     if "Some(true)" in raw:
         return EquivalenceResult(
             verdict=Verdict.NON_EQUIVALENT,
-            detail=(
-                "Formulas are NOT equivalent (XOR formula is SAT — "
-                "a distinguishing signal trace exists)."
-            ),
-            raw_output=raw,
-            formula=combined,
+            detail="NOT equivalent (XOR formula is SAT).",
+            raw_output=raw, formula=combined,
         )
-
     return EquivalenceResult(
         verdict=Verdict.ERROR,
-        detail=f"stlsat returned an unexpected result. Raw output: {raw[:300]}",
-        raw_output=raw,
-        formula=combined,
+        detail=f"Unexpected stlsat output: {raw[:200]}",
+        raw_output=raw, formula=combined,
     )
  
  
 # ---------------------------------------------------------------------------
-# Batch helper — useful for the benchmark loop
+# Batch helper
 # ---------------------------------------------------------------------------
  
 def check_equivalence_batch(
     pairs: list[tuple[str, str]],
     timeout: int = 30,
 ) -> list[EquivalenceResult]:
-    """
-    Run equivalence checks for a list of (phi_reference, phi_generated) pairs.
-    Returns one EquivalenceResult per pair, in the same order.
-    """
     return [check_equivalence(p1, p2, timeout=timeout) for p1, p2 in pairs]
  
  
 # ---------------------------------------------------------------------------
-# Quick smoke test — run with:  python stlsat_checker.py
+# Dataset runner
+# ---------------------------------------------------------------------------
+ 
+EXTRA_COLS = ["equiv_verdict", "equiv_detail", "duration_sec"]
+ 
+ 
+def run_dataset(
+    input_path: str,
+    output_path: str,
+    gold_col:  str = "gold_normalised",
+    pred_col:  str = "pred_normalised",
+    timeout:   int = 30,
+) -> None:
+    src = Path(input_path)
+    out = Path(output_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+ 
+    if not src.exists():
+        print(f"ERROR: {src} not found. Run scale_bound_norm.py first.")
+        return
+ 
+    rows_in     = list(csv.DictReader(src.open(encoding="utf-8")))
+    base_fields = list(rows_in[0].keys())
+    out_fields  = base_fields + [c for c in EXTRA_COLS if c not in base_fields]
+ 
+    stlsat_rows = rows_in
+    other_rows  = []
+ 
+    counts      = {"EQUIVALENT": 0, "NON_EQUIVALENT": 0, "ERROR": 0, "SKIPPED": 0}
+    rows_out    = []
+    equiv_pairs = []
+    total_time  = 0.0
+ 
+    print(f"Checking {len(stlsat_rows)} STLSat pairs from {src.name} ...")
+    print(f"(Passing {len(other_rows)} non-stlsat rows through unchanged)\n")
+ 
+    for row in stlsat_rows:
+        gold = row.get(gold_col, "").strip()
+        pred = row.get(pred_col, "").strip()
+ 
+        if not gold or not pred:
+            result = EquivalenceResult(
+                verdict=Verdict.ERROR,
+                detail="Missing formula.",
+                raw_output="", duration_sec=0.0,
+            )
+        else:
+            result = check_equivalence(gold, pred, timeout=timeout)
+ 
+        total_time += result.duration_sec
+        counts[result.verdict.value] = counts.get(result.verdict.value, 0) + 1
+ 
+        symbol = {"EQUIVALENT": "v", "NON_EQUIVALENT": "x", "ERROR": "!"}[result.verdict.value]
+        print(f"  [{symbol}] {row.get('review_id','?'):10s}  "
+              f"{result.verdict.value:15s}  {result.duration_sec*1000:.1f}ms")
+ 
+        if result.verdict == Verdict.EQUIVALENT:
+            equiv_pairs.append(row)
+ 
+        rows_out.append({**row,
+            "equiv_verdict": result.verdict.value,
+            "equiv_detail":  result.detail,
+            "duration_sec":  f"{result.duration_sec:.4f}",
+        })
+ 
+    for row in other_rows:
+        counts["SKIPPED"] += 1
+        rows_out.append({**row,
+            "equiv_verdict": "",
+            "equiv_detail":  "",
+            "duration_sec":  "",
+        })
+ 
+    with out.open("w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=out_fields, extrasaction="ignore")
+        w.writeheader()
+        w.writerows(rows_out)
+ 
+    total = len(stlsat_rows)
+    print(f"\n{'='*55}")
+    print(f"Results written to: {out}")
+    print(f"\nSummary ({total} STLSat pairs):")
+    print(f"  EQUIVALENT     : {counts['EQUIVALENT']:4d}  ({100*counts['EQUIVALENT']/max(total,1):.1f}%)")
+    print(f"  NON_EQUIVALENT : {counts['NON_EQUIVALENT']:4d}  ({100*counts['NON_EQUIVALENT']/max(total,1):.1f}%)")
+    print(f"  ERROR          : {counts['ERROR']:4d}  ({100*counts['ERROR']/max(total,1):.1f}%)")
+    print(f"  Total time     : {total_time*1000:.1f}ms  (avg {total_time*1000/max(total,1):.1f}ms/pair)")
+    print(f"  (non-stlsat rows passed through: {counts['SKIPPED']})")
+ 
+    if equiv_pairs:
+        print(f"\nEquivalent pairs ({len(equiv_pairs)}):")
+        for r in equiv_pairs:
+            print(f"  {r.get('review_id','?')}")
+            print(f"    gold : {r.get('gold_formula','')}")
+            print(f"    pred : {r.get('predicted_formula','')}")
+ 
+ 
+# ---------------------------------------------------------------------------
+# Entry point
 # ---------------------------------------------------------------------------
  
 if __name__ == "__main__":
-    tests = [
-        # (description, phi1, phi2, expected_verdict)
-        (
-            "identical formulas",
-            "G[0,10] (x > 5)",
-            "G[0,10] (x > 5)",
-            Verdict.EQUIVALENT,
-        ),
-        (
-            "logically equivalent rewrite",
-            "G[0,10] (x > 5)",
-            "!F[0,10] (x <= 5)",
-            Verdict.EQUIVALENT,
-        ),
-        (
-            "clearly different",
-            "G[0,10] (x > 5)",
-            "F[0,10] (x > 5)",
-            Verdict.NON_EQUIVALENT,
-        ),
-        (
-            "unbounded G — should give ERROR",
-            "G (x > 5)",
-            "G[0,10] (x > 5)",
-            Verdict.ERROR,
-        ),
-    ]
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input",    default=None)
+    parser.add_argument("--output",   default="data/stlsat_results.csv")
+    parser.add_argument("--gold-col", default="gold_normalised")
+    parser.add_argument("--pred-col", default="pred_normalised")
+    parser.add_argument("--timeout",  type=int, default=30)
+    args = parser.parse_args()
  
-    print("STLSat equivalence checker — smoke tests\n" + "=" * 45)
-    all_passed = True
-    for desc, phi1, phi2, expected in tests:
-        result = check_equivalence(phi1, phi2)
-        status = "PASS" if result.verdict == expected else "FAIL"
-        if status == "FAIL":
-            all_passed = False
-        print(f"[{status}] {desc}")
-        print(f"       verdict : {result.verdict.value}")
-        print(f"       detail  : {result.detail}")
-        print()
- 
-    print("All tests passed." if all_passed else "Some tests FAILED — check output above.")
+    if args.input:
+        run_dataset(args.input, args.output, args.gold_col, args.pred_col, args.timeout)
+    else:
+        print('Error')
