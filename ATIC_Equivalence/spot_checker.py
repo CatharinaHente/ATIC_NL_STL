@@ -1,8 +1,8 @@
 """
 spot_checker.py
 ---------------
-Reads data/layer2.csv, filters rows where suitability == 'spot',
-checks LTL equivalence using SPOT, and writes data/spot_results.csv.
+Reads data/layer2.csv and checks equivalence of ALL LTL formula pairs
+using SPOT's are_equivalent(). Writes data/spot_results.csv.
 
 Usage
 -----
@@ -13,41 +13,77 @@ python spot_checker.py \
 
 import argparse
 import csv
+import signal
+import time
 from pathlib import Path
 
 try:
     import spot
     SPOT_AVAILABLE = True
+    # shared language containment checker — caches automata across calls
+    _lcc = spot.language_containment_checker()
 except ImportError:
     SPOT_AVAILABLE = False
+    _lcc = None
     print("WARNING: SPOT not installed. Run: conda install -c conda-forge spot")
+
+
+# ---------------------------------------------------------------------------
+# Timeout helper (Unix only)
+# ---------------------------------------------------------------------------
+
+class _Timeout:
+    def __init__(self, seconds):
+        self.seconds = seconds
+
+    def _handler(self, signum, frame):
+        raise TimeoutError(f"SPOT timed out after {self.seconds}s")
+
+    def __enter__(self):
+        try:
+            signal.signal(signal.SIGALRM, self._handler)
+            signal.alarm(self.seconds)
+        except (AttributeError, OSError):
+            pass  # Windows — no SIGALRM, skip timeout
+        return self
+
+    def __exit__(self, *args):
+        try:
+            signal.alarm(0)
+        except (AttributeError, OSError):
+            pass
 
 
 # ---------------------------------------------------------------------------
 # Single pair check
 # ---------------------------------------------------------------------------
 
-def check_pair(ltl1: str, ltl2: str) -> tuple[str, str]:
-    """Returns (verdict, detail). verdict: EQUIVALENT | NON_EQUIVALENT | ERROR"""
+def check_pair(ltl1: str, ltl2: str, timeout: int = 10) -> tuple[str, str, float]:
+    """Returns (verdict, detail, duration_ms)."""
     if not SPOT_AVAILABLE:
-        return "ERROR", "SPOT not installed."
+        return "ERROR", "SPOT not installed.", 0.0
     if not ltl1 or not ltl2:
-        return "ERROR", "Empty LTL formula."
+        return "ERROR", "Empty LTL formula.", 0.0
     try:
-        eq = spot.are_equivalent(ltl1, ltl2)
+        t0 = time.perf_counter()
+        with _Timeout(timeout):
+            eq = _lcc.are_equivalent(ltl1, ltl2)
+        duration_ms = (time.perf_counter() - t0) * 1000
         if eq:
-            return "EQUIVALENT", "Equivalent under LTL abstraction."
+            return "EQUIVALENT", "Equivalent under LTL abstraction.", duration_ms
         else:
-            return "NON_EQUIVALENT", "NOT equivalent — distinguishing trace exists."
+            return "NON_EQUIVALENT", "NOT equivalent — distinguishing trace exists.", duration_ms
+    except TimeoutError as e:
+        return "TIMEOUT", str(e), (time.perf_counter() - t0) * 1000
     except Exception as e:
-        return "ERROR", f"SPOT parse error: {e}"
+        return "ERROR", f"SPOT parse error: {e}", 0.0
 
 
 # ---------------------------------------------------------------------------
-# Dataset runner
+# Dataset runner — checks ALL rows
 # ---------------------------------------------------------------------------
 
-EXTRA_COLS = ["equiv_verdict", "equiv_detail"]
+EXTRA_COLS = ["equiv_verdict", "equiv_detail", "duration_ms"]
 
 
 def run(input_path: str, output_path: str,
@@ -66,52 +102,47 @@ def run(input_path: str, output_path: str,
     base_fields = list(rows_in[0].keys())
     out_fields  = base_fields + [c for c in EXTRA_COLS if c not in base_fields]
 
-    counts      = {"EQUIVALENT": 0, "NON_EQUIVALENT": 0, "ERROR": 0, "SKIPPED": 0}
+    counts      = {"EQUIVALENT": 0, "NON_EQUIVALENT": 0, "ERROR": 0}
     rows_out    = []
     equiv_pairs = []
+    total_ms    = 0.0
 
-    # only process spot rows
-    spot_rows  = rows_in
-    other_rows = []
+    print(f"Checking all {len(rows_in)} pairs from {src.name} ...\n")
 
-    print(f"Checking {len(spot_rows)} SPOT pairs from {src.name} …")
-    print(f"(Passing through {len(other_rows)} non-spot rows unchanged)\n")
-
-    for row in spot_rows:
+    for row in rows_in:
         ltl_gold = row.get(ltl_gold_col, "").strip()
         ltl_pred = row.get(ltl_pred_col, "").strip()
 
-        verdict, detail = check_pair(ltl_gold, ltl_pred)
-        counts[verdict] += 1
+        verdict, detail, duration_ms = check_pair(ltl_gold, ltl_pred)
+        counts[verdict] = counts.get(verdict, 0) + 1
+        total_ms += duration_ms
 
-        symbol = {"EQUIVALENT": "✓", "NON_EQUIVALENT": "✗", "ERROR": "!"}[verdict]
-        print(f"  [{symbol}] {row.get('review_id','?'):10s}  {verdict}")
+        symbol = {"EQUIVALENT": "v", "NON_EQUIVALENT": "x", "ERROR": "!"}[verdict]
+        print(f"  [{symbol}] {row.get('review_id','?'):10s}  "
+              f"{verdict:15s}  {duration_ms:.2f}ms")
 
         if verdict == "EQUIVALENT":
             equiv_pairs.append(row)
 
-        rows_out.append({**row, "equiv_verdict": verdict, "equiv_detail": detail})
+        rows_out.append({**row,
+            "equiv_verdict": verdict,
+            "equiv_detail":  detail,
+            "duration_ms":   f"{duration_ms:.3f}",
+        })
 
-    # pass through non-spot rows with empty verdict columns
-    for row in other_rows:
-        counts["SKIPPED"] += 1
-        rows_out.append({**row, "equiv_verdict": "", "equiv_detail": ""})
-
-    # write results
     with out.open("w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=out_fields, extrasaction="ignore")
         w.writeheader()
         w.writerows(rows_out)
 
-    # summary
-    total = len(spot_rows)
-    print(f"\n{'='*50}")
+    total = len(rows_in)
+    print(f"\n{'='*55}")
     print(f"Results written to: {out}")
-    print(f"\nSummary ({total} SPOT pairs checked):")
-    print(f"  EQUIVALENT     : {counts['EQUIVALENT']:4d}  ({100*counts['EQUIVALENT']/max(total,1):.1f}%)")
-    print(f"  NON_EQUIVALENT : {counts['NON_EQUIVALENT']:4d}  ({100*counts['NON_EQUIVALENT']/max(total,1):.1f}%)")
-    print(f"  ERROR          : {counts['ERROR']:4d}  ({100*counts['ERROR']/max(total,1):.1f}%)")
-    print(f"  (non-spot rows passed through: {counts['SKIPPED']})")
+    print(f"\nSummary ({total} pairs):")
+    print(f"  EQUIVALENT     : {counts['EQUIVALENT']:4d}  ({100*counts['EQUIVALENT']/total:.1f}%)")
+    print(f"  NON_EQUIVALENT : {counts['NON_EQUIVALENT']:4d}  ({100*counts['NON_EQUIVALENT']/total:.1f}%)")
+    print(f"  ERROR          : {counts['ERROR']:4d}  ({100*counts['ERROR']/total:.1f}%)")
+    print(f"  Total time     : {total_ms:.1f}ms  (avg {total_ms/total:.2f}ms/pair)")
 
     if equiv_pairs:
         print(f"\nEquivalent pairs ({len(equiv_pairs)}):")

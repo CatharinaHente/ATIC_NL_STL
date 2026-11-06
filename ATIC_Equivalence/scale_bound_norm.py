@@ -37,15 +37,21 @@ from pathlib import Path
 # Configuration
 # ---------------------------------------------------------------------------
 
-DEFAULT_HORIZON = 100
+DEFAULT_HORIZON = 100000
 
 # ---------------------------------------------------------------------------
 # Detection regexes
 # ---------------------------------------------------------------------------
 
-_INTERVAL_RE  = re.compile(r'\[(\s*\d+(?:\.\d+)?\s*),(\s*\d+(?:\.\d+)?\s*)\]')
-_UNBOUNDED_RE = re.compile(r'\b([GF])\s*(?!\[)')
-_RISE_RE      = re.compile(r'\brise\s*\(')
+_INTERVAL_RE      = re.compile(r'\[(\s*\d+(?:\.\d+)?\s*),(\s*\d+(?:\.\d+)?\s*)\]')
+_SYMBOLIC_INTERVAL= re.compile(r'\[\s*\d+\s*,\s*[A-Za-z_][A-Za-z0-9_]*\s*\]|'
+                                r'\[\s*[A-Za-z_][A-Za-z0-9_]*\s*,\s*\d+\s*\]|'
+                                r'\[\s*[A-Za-z_][A-Za-z0-9_]*\s*,\s*[A-Za-z_][A-Za-z0-9_]*\s*\]')
+_UNBOUNDED_RE     = re.compile(r'\b([GF])\s*(?!\[)')
+_RISE_RE          = re.compile(r'\brise\s*\(')
+_FALL_RE          = re.compile(r'\bfall\s*\(')
+_PARAMETRIC_RE    = re.compile(r'\b(?:OR|AND)_[a-zA-Z{]')   # OR_i(  AND_{i<j}(
+_FUNC_CALL_RE     = re.compile(r'\b(?:distance|in_surveillance)\s*\(')  # distance(...)
 
 # ---------------------------------------------------------------------------
 # Suitability labels
@@ -92,35 +98,64 @@ def _scale_interval(m: re.Match, scale: int) -> str:
 # ---------------------------------------------------------------------------
 
 def normalise(formula: str, horizon: int = DEFAULT_HORIZON) -> NormResult:
-    """Normalise one STL formula string. Only modifies when necessary."""
+    """
+    Normalise one STL formula string. Only modifies when necessary.
+
+    Modification log — every change is recorded in NormResult.changes with
+    its implication so the caller can trace exactly what was done and why.
+    """
     f        = formula.strip()
     changes  = []
     warnings = []
 
-    # 1. Unsupported: rise()
-    if _RISE_RE.search(f):
+    # --- unsupported operators: flag and skip immediately ---
+
+    if _RISE_RE.search(f) or _FALL_RE.search(f):
+        return NormResult(
+            original=formula, normalised=f, suitability=SPOT,
+            changes=["Contains rise()/fall() — will be rewritten to Y operator for SPOT."],
+            warnings=["rise()/fall() not supported by STLSat — SPOT only via rise_fall_rewriter."],
+        )
+
+    if _PARAMETRIC_RE.search(f) or _FUNC_CALL_RE.search(f):
         return NormResult(
             original=formula, normalised=f, suitability=SKIP,
-            warnings=["Contains rise() — unsupported by STLSat and SPOT."],
+            warnings=["Contains parametric/indexed operator (OR_i, AND_{i<j}, distance()) "
+                      "— not supported by STLSat or SPOT."],
+        )
+
+    if _SYMBOLIC_INTERVAL.search(f):
+        return NormResult(
+            original=formula, normalised=f, suitability=SKIP,
+            warnings=["Contains symbolic interval bound (e.g. G[0,H]) — "
+                      "STLSat requires integer bounds. Cannot safely substitute."],
         )
 
     suitability = STLSAT  # optimistic
 
-    # 2. Real-valued intervals → scale (exact, STLSat-safe)
+    # --- modification 1: real-valued intervals → scale (exact, STLSat-safe) ---
     fracs    = _fractions(f)
     has_real = any(fr.denominator != 1 for fr in fracs)
     if has_real:
         scale = _scale_factor(fracs)
         f = _INTERVAL_RE.sub(lambda m: _scale_interval(m, scale), f)
-        changes.append(f"Scaled real-valued intervals by ×{scale}")
+        changes.append(
+            f"Scaled real-valued intervals by ×{scale} "
+            f"(exact transformation — preserves semantics for both STLSat and SPOT)"
+        )
 
-    # 3. Unbounded G/F → add horizon bound (SPOT path only)
+    # --- modification 2: unbounded G/F → add horizon bound ---
     if _UNBOUNDED_RE.search(f):
         f = _UNBOUNDED_RE.sub(lambda m: f'{m.group(1)}[0,{horizon}]', f)
-        changes.append(f"Bounded unbounded operator(s) with [0,{horizon}]")
+        changes.append(
+            f"Added [0,{horizon}] to unbounded G/F operator(s) "
+            f"(semantic change: G/F[0,{horizon}] is strictly stronger than G/F unbounded — "
+            f"valid for SPOT structural comparison only, not for STLSat exact check)"
+        )
         warnings.append(
-            f"Semantic change: G/F[0,{horizon}] ≠ G/F unbounded. "
-            "Valid for SPOT path only."
+            f"Implication: bounding changes semantics. Use SPOT result with caution — "
+            f"EQUIVALENT result means structurally equivalent up to horizon {horizon}, "
+            f"not over all time."
         )
         suitability = SPOT
 
